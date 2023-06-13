@@ -26,7 +26,7 @@
    (-> (make-base-query table-info)
        (cond-> last-id
          (h/where [:> (keyword (:primary-key table-info)) last-id]))
-       (h/limit 5)
+       (h/limit 10000)
        (sql/format))))
 
 (defn fetch [query]
@@ -70,5 +70,3 @@
      (write-data filename data)
      (when (seq data)
        (fetch-and-save table-info (pk-keyword (last data)))))))
-
-;; (take 16 (reverse (read-data "data/locations.edn")))
