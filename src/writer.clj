@@ -1,6 +1,6 @@
 (ns writer
   (:gen-class)
-  (:require [clojure.data.csv :as csv]
+  (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
             [honey.sql :as sql]
             [honey.sql.helpers :as h]
@@ -26,16 +26,8 @@
    (-> (make-base-query table-info)
        (cond-> last-id
          (h/where [:> (keyword (:primary-key table-info)) last-id]))
-       (h/limit 10000)
+       (h/limit 5)
        (sql/format))))
-
-(defn write-to-csv
-  [filename data headers]
-  (if (.exists (io/file filename))
-    (with-open [writer (io/writer filename :append true)]
-      (csv/write-csv writer (map vals data)))
-    (with-open [writer (io/writer filename)]
-      (csv/write-csv writer (conj (map vals data) headers)))))
 
 (defn fetch [query]
   (let [db (read-string (slurp "env.edn"))
@@ -43,16 +35,39 @@
     (jdbc/with-transaction [conn ds]
       (jdbc/execute! conn query))))
 
+(defn read-data [filename]
+  (if-let [file-content (slurp (io/file filename) :if-does-not-exist "")]
+    (if (empty? file-content) [] (edn/read-string file-content))
+    []))
+
+(defn write-data [filename data]
+  (let [existing-data (read-data filename)
+        merged-data (concat existing-data data)]
+    (spit filename (prn-str merged-data))))
+
+(defn get-filename [table-info]
+  (str "data/" (:name table-info) ".edn"))
+
+(defn get-pk-keyword [table-info]
+  (keyword (str (:name table-info) "/" (:primary-key table-info))))
+
 (defn fetch-and-save
-  ([table-info]
-   (fetch-and-save table-info nil))
-  ([table-info last-id]
+  ([table-info] ;; first call
+   (let [pk-keyword (get-pk-keyword table-info)
+         filename (get-filename table-info)
+         data (read-data filename)
+         last-id (if (seq data)
+                   (pk-keyword (last data))
+                   nil)]
+     (fetch-and-save table-info last-id)))
+  ([table-info last-id] ;; recursive call
    (let [query (build-query table-info last-id)
          data (fetch query)
-         filename (str "data/" (:name table-info) ".csv")
-         headers (if (not-empty data) (keys (first data)) nil)
-         namespaced-key (keyword (:name table-info) (:primary-key table-info))]
-     (println (str "fetched " (count data) (:name table-info) " " last-id))
-     (write-to-csv filename data headers)
+         filename (get-filename table-info)
+         pk-keyword (get-pk-keyword table-info)]
+     (println (str "fetched " (count data) " " (:name table-info) " " last-id))
+     (write-data filename data)
      (when (seq data)
-       (fetch-and-save table-info (get (last data) namespaced-key))))))
+       (fetch-and-save table-info (pk-keyword (last data)))))))
+
+(take 16 (reverse (read-data "data/locations.edn")))
