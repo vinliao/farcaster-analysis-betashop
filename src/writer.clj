@@ -36,8 +36,9 @@
       (jdbc/execute! conn query))))
 
 (defn read-data [filename]
-  (if-let [file-content (slurp (io/file filename) :if-does-not-exist "")]
-    (if (empty? file-content) [] (edn/read-string file-content))
+  (if (.exists (io/file filename))
+    (let [file-content (slurp (io/file filename))]
+      (if (empty? file-content) [] (edn/read-string file-content)))
     []))
 
 (defn write-data [filename data]
@@ -70,4 +71,4 @@
      (when (seq data)
        (fetch-and-save table-info (pk-keyword (last data)))))))
 
-(take 16 (reverse (read-data "data/locations.edn")))
+;; (take 16 (reverse (read-data "data/locations.edn")))
