@@ -3,23 +3,16 @@
             [clojure.java.io :as io]
             [writer :as w]))
 
-(:users w/table-infos)
-
-;; (defn read-csv [filename]
-;;   (with-open [reader (io/reader filename)]
-;;     (doall
-;;      (map (fn [row]
-;;             (zipmap [:locations/id :locations/description] row))
-;;           (csv/read-csv reader)))))
+(w/fetch-and-save (:locations w/table-infos))
 
 (defn read-csv [filename]
   (with-open [reader (io/reader filename)]
-  (->>
-    (csv/read-csv reader)
-    (map (fn [row]
-           (zipmap [:locations/id :locations/description] row))))))
+    (let [rows (csv/read-csv reader)
+          headers (map keyword (first rows))
+          data (rest rows)]
+      (doall (map (fn [row]
+                    (zipmap headers row))
+                  data)))))
 
-(read-csv "locations.csv")
-
-;; (def reader (io/reader "locations.csv"))
-;; (def data (csv/read-csv reader))
+(def data (read-csv "data/locations.csv"))
+(take 10 (shuffle data))
