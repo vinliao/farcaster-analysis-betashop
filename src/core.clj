@@ -5,8 +5,7 @@
             [writer :as w]))
 
 ;; TODO: use the actual cast data later on, 1000 for speeding up iteration
-(def users500 (w/read-data "data/users500.edn"))
-(def users (take 10 users500))
+(def users (w/read-data "data/users.edn"))
 (def casts (w/read-data "data/casts1000.edn"))
 
 (defmulti get-timestamp-joda (fn [data]
@@ -20,6 +19,7 @@
   (c/from-long (:casts/timestamp cast)))
 (defmethod get-timestamp-joda :default [data] data)
 
+;; use this for all map-maker
 (def start-timestamp (->> users
                           (sort-by :users/registered_at)
                           first
@@ -35,16 +35,19 @@
           (/ 7)
           int))))
 
-(defn group-user-register-by-week [users start-timestamp]
+(defn make-registrations-map [users start-timestamp]
   (let [counter (java.util.concurrent.ConcurrentHashMap.)]
     (doseq [user users]
-      (let [week (keyword (str "week-" (get-week start-timestamp (get-timestamp-joda user))))]
+      (let [week (keyword (str "registrations/week-" (get-week start-timestamp (get-timestamp-joda user))))]
         (.put counter week (inc (.getOrDefault counter week 0)))))
     (into {} counter)))
 
-(def register-group (group-user-register-by-week users start-timestamp))
-(get register-group 0)
-(type (keys register-group))
+(def registrations-map (make-registrations-map users start-timestamp))
+(->> registrations-map
+     (sort-by val)
+     (reverse)
+     (take 10))
+(:registrations/week-0 registrations-map)
 
 ;; (defn get-weekly-timestamps [start-timestamp]
 ;;   (let [now (t/now)
