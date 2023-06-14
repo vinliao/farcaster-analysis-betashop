@@ -41,7 +41,7 @@
       (if (empty? file-content) [] (edn/read-string file-content)))
     []))
 
-(defn write-data [filename data]
+(defn append-data [filename data]
   (let [existing-data (read-data filename)
         merged-data (concat existing-data data)]
     (spit filename (prn-str merged-data))))
@@ -67,6 +67,6 @@
          filename (get-filename table-info)
          pk-keyword (get-pk-keyword table-info)]
      (println (str "fetched " (count data) " " (:name table-info) " " last-id))
-     (write-data filename data)
+     (append-data filename data)
      (when (seq data)
        (fetch-and-save table-info (pk-keyword (last data)))))))

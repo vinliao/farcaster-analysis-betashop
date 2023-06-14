@@ -20,3 +20,4 @@ words.txt
 env.edn
 *.log
 /data
+casts.bak.edn
