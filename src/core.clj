@@ -20,33 +20,36 @@
   (c/from-long (:casts/timestamp cast)))
 (defmethod get-timestamp-joda :default [data] data)
 
-
 (def start-timestamp (->> users
                           (sort-by :users/registered_at)
                           first
                           get-timestamp-joda))
 
-
-(defn get-weekly-timestamps [start-timestamp]
-  (let [now (t/now)
-        start start-timestamp]
-    (take-while #(t/before? % now) (p/periodic-seq start (t/weeks 1)))))
+(defn get-week [start-timestamp timestamp]
+  (let [timestamp-joda (get-timestamp-joda timestamp)]
+    (if (.isEqual start-timestamp timestamp-joda)
+      0
+      (-> (t/interval start-timestamp timestamp-joda)
+          (.toDuration)
+          (.getStandardDays)
+          (/ 7)
+          int))))
 
 (defn group-user-register-by-week [users start-timestamp]
-  (let [get-week (fn [timestamp]
-                   (let [timestamp-joda (get-timestamp-joda timestamp)]
-                     (if (.isEqual start-timestamp timestamp-joda)
-                       0
-                       (-> (t/interval start-timestamp timestamp-joda)
-                           (.toDuration)
-                           (.getStandardDays)
-                           (/ 7)
-                           int))))]
-    (group-by (comp get-week get-timestamp-joda) users)))
+  (let [counter (java.util.concurrent.ConcurrentHashMap.)]
+    (doseq [user users]
+      (let [week (keyword (str "week-" (get-week start-timestamp (get-timestamp-joda user))))]
+        (.put counter week (inc (.getOrDefault counter week 0)))))
+    (into {} counter)))
 
 (def register-group (group-user-register-by-week users start-timestamp))
 (get register-group 0)
 (type (keys register-group))
+
+;; (defn get-weekly-timestamps [start-timestamp]
+;;   (let [now (t/now)
+;;         start start-timestamp]
+;;     (take-while #(t/before? % now) (p/periodic-seq start (t/weeks 1)))))
 
 ;; (spit "data/register-groups.edn" (pr-str register-group))
 ;; (group-users-by-week users first-cast-timestamp)
