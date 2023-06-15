@@ -5,6 +5,9 @@
 
 (def users (w/read-data "data/users.edn"))
 (def casts (w/read-data "data/casts.edn"))
+(defn group-casts-by-fid [casts]
+  (group-by :casts/author_fid casts))
+(def casts-by-fid (group-casts-by-fid casts))
 
 (defmulti get-timestamp-joda (fn [data]
                                (cond
@@ -39,31 +42,23 @@
         (.put counter week (conj (.getOrDefault counter week []) user))))
     (into {} counter)))
 
-(defn get-weekly-casts [casts users]
-  (let [get-casts-by-user (fn [casts user]
-                            (filter (fn [cast] (= (:casts/author_fid cast) (:users/fid user))) casts))
-        get-casts-in-week (fn [casts user]
-                            (let [one-week-later (t/plus (get-timestamp-joda user) (t/weeks 1))]
-                              (filter (fn [cast]
-                                        (and (t/after? (get-timestamp-joda cast) (get-timestamp-joda user))
-                                             (t/before? (get-timestamp-joda cast) one-week-later)))
-                                      casts)))]
-    (reduce (fn [result user]
-              (assoc result (:users/username user)
-                     (-> casts
-                         (get-casts-by-user user)
-                         (get-casts-in-week user)
-                         count)))
-            {}
-            users)))
+(defn get-first-week-casts [casts-by-fid user]
+  (let [casts-by-user (get casts-by-fid (:users/fid user))
+        one-week-later (t/plus (get-timestamp-joda user) (t/weeks 1))]
+    (filter (fn [cast]
+              (and (t/after? (get-timestamp-joda cast) (get-timestamp-joda user))
+                   (t/before? (get-timestamp-joda cast) one-week-later)))
+            casts-by-user)))
 
-(def registrations-map (w/read-data "data/registrations-map.edn"))
-(defn get-weekly-casts-for-all-weeks [casts registrations-map]
-  (reduce (fn [result week-key]
-            (let [user-batch (get registrations-map week-key)
-                  weekly-casts-for-week (get-weekly-casts casts user-batch)]
-              (assoc result week-key weekly-casts-for-week)))
-          {}
-          (keys registrations-map)))
+;; (defn get-weekly-casts-for-all-weeks [casts registrations-map]
+;;   (let [casts-by-user (group-by :casts/author_fid casts)] ;; Pre-compute mapping from user to casts
+;;     (pmap (fn [week-key]
+;;             (let [user-batch (get registrations-map week-key)
+;;                   weekly-casts-for-week (get-weekly-casts casts-by-user user-batch)]
+;;               [week-key weekly-casts-for-week]))
+;;           (keys registrations-map))))
 
-(def weekly-casts-map (get-weekly-casts-for-all-weeks casts registrations-map))
+;; ;; (def registrations-map (w/read-data "data/registrations-map.edn"))
+;; (def registrations-map (make-registrations-map users start-timestamp))
+;; (def weekly-casts-map (get-weekly-casts-for-all-weeks casts registrations-map))
+;; (w/append-data "data/first-week-cast-frequency.edn" weekly-casts-map)
