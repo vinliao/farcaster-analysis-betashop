@@ -2,6 +2,8 @@
   (:gen-class)
   (:require [clj-time.core :as t]
             [clj-time.format :as f]
+            [clojure.data.csv :as csv]
+            [clojure.java.io :as io]
             [utils :as u]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -96,4 +98,22 @@
        (map (fn [row] (assoc row :week (week-to-string (:week row)))))))
 
 (def frequency-matrix (users-to-table processed-users))
-(spit "data/frequency-matrix.edn" (pr-str frequency-matrix))
+
+(defn format-frequency-matrix-row [data]
+  [(or (:week data) "")
+   (or (:num-signups data) 0)
+   (or (get (:cast-frequencies data) :cast-0) 0)
+   (or (get (:cast-frequencies data) :cast-1) 0)
+   (or (get (:cast-frequencies data) :cast-10+) 0)
+   (or (get (:cast-frequencies data) :cast-25+) 0)
+   (or (get (:cast-frequencies data) :cast-50+) 0)
+   (or (get (:cast-frequencies data) :cast-100+) 0)])
+
+(defn format-frequency-matrix-csv [data]
+  (map format-frequency-matrix-row data))
+
+(defn make-frequency-matrix-csv [data file]
+  (with-open [writer (io/writer file)]
+    (csv/write-csv writer (cons ["Signup Week" "Number Signups" "Casted 0 Times" "=1x" ">10x" ">25x" ">50x" ">100x"] (format-frequency-matrix-csv data)))))
+
+(make-frequency-matrix-csv frequency-matrix "data/frequency-matrix.csv")
