@@ -1,10 +1,9 @@
 (ns writer
   (:gen-class)
-  (:require [clojure.edn :as edn]
-            [clojure.java.io :as io]
-            [honey.sql :as sql]
+  (:require [honey.sql :as sql]
             [honey.sql.helpers :as h]
-            [next.jdbc :as jdbc]))
+            [next.jdbc :as jdbc]
+            [utils :as u]))
 
 (def table-infos {:locations {:name "locations"
                               :primary-key "id"}
@@ -35,17 +34,6 @@
     (jdbc/with-transaction [conn ds]
       (jdbc/execute! conn query))))
 
-(defn read-data [filename]
-  (if (.exists (io/file filename))
-    (let [file-content (slurp (io/file filename))]
-      (if (empty? file-content) [] (edn/read-string file-content)))
-    []))
-
-(defn append-data [filename data]
-  (let [existing-data (read-data filename)
-        merged-data (concat existing-data data)]
-    (spit filename (prn-str merged-data))))
-
 (defn get-filename [table-info]
   (str "data/" (:name table-info) ".edn"))
 
@@ -56,7 +44,7 @@
   ([table-info] ;; first call
    (let [pk-keyword (get-pk-keyword table-info)
          filename (get-filename table-info)
-         data (read-data filename)
+         data (u/read-edn filename)
          last-id (if (seq data)
                    (pk-keyword (last data))
                    nil)]
@@ -67,6 +55,8 @@
          filename (get-filename table-info)
          pk-keyword (get-pk-keyword table-info)]
      (println (str "fetched " (count data) " " (:name table-info) " " last-id))
-     (append-data filename data)
+     (u/write-edn filename data)
      (when (seq data)
        (fetch-and-save table-info (pk-keyword (last data)))))))
+
+;; (fetch-and-save (table-infos :users))

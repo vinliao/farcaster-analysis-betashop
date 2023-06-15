@@ -3,4 +3,5 @@
   seancorfield/next.jdbc {:mvn/version "1.2.659"}
   com.github.seancorfield/honeysql {:mvn/version "2.4.1033"}
   mysql/mysql-connector-java {:mvn/version "8.0.23"}
+  org.clojure/data.csv {:mvn/version "1.0.1"}
   clj-time/clj-time {:mvn/version "0.15.2"}}}
