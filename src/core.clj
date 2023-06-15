@@ -1,17 +1,14 @@
 (ns core
   (:gen-class)
-  (:require
-   [clj-time.core :as t]
-   [clojure.data.csv :as csv]
-   [clojure.java.io :as io]
-   [utils :as u]
-   [writer :as w]))
+  (:require [clj-time.core :as t]
+            [clj-time.format :as f]
+            [utils :as u]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; data init
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(def users (w/read-data "data/users.edn"))
-(def casts (w/read-data "data/casts.edn"))
+(def users (u/read-edn "data/users.edn"))
+(def casts (u/read-edn "data/casts.edn"))
 (defn group-casts-by-fid [casts]
   (group-by :casts/author_fid casts))
 (def casts-by-fid (group-casts-by-fid casts))
@@ -57,45 +54,46 @@
 
 (def processed-users (get-user-cast-data users end-timestamp))
 
-;; (csv/write-csv "processed-users.csv" (map #(vector (:fid %)
-;;                                                    (:username %)
-;;                                                    (:registered-at %)
-;;                                                    (:first-week-cast-count %)
-;;                                                    (:casted-last-week? %))
-;;                                           processed-users))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; frequency matrix
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn week-of [timestamp]
+  (let [timestamp-joda (u/get-timestamp-joda timestamp)]
+    (if (.isEqual start-timestamp timestamp-joda)
+      0
+      (-> (t/interval start-timestamp timestamp-joda)
+          (.toDuration)
+          (.getStandardDays)
+          (/ 7)
+          int))))
 
-;; (:username (first processed-users))
-;; (spit "data/processed-users.edn" (pr-str processed-users))
+(defn week-to-string [week-num]
+  (let [date-after-n-weeks (t/plus start-timestamp (t/weeks week-num))]
+    (f/unparse (f/formatter "MMMM d, yyyy") date-after-n-weeks)))
 
-;; (defn get-week [start-timestamp timestamp]
-;;   (let [timestamp-joda (u/get-timestamp-joda timestamp)]
-;;     (if (.isEqual start-timestamp timestamp-joda)
-;;       0
-;;       (-> (t/interval start-timestamp timestamp-joda)
-;;           (.toDuration)
-;;           (.getStandardDays)
-;;           (/ 7)
-;;           int))))
+(defn classify-casts [user]
+  (let [count (:first-week-cast-count user)]
+    (cond
+      (zero? count) :cast-0
+      (= 1 count) :cast-1
+      (>= count 100) :cast-100+
+      (>= count 50) :cast-50+
+      (>= count 25) :cast-25+
+      (>= count 10) :cast-10+
+      (>= count 2) :cast-2+)))
 
-;; (defn make-registrations-map [users start-timestamp]
-;;   (let [counter (java.util.concurrent.ConcurrentHashMap.)]
-;;     (doseq [user users]
-;;       (let [week (keyword (str "registrations/week-" (get-week start-timestamp (u/get-timestamp-joda user))))]
-;;         (.put counter week (conj (.getOrDefault counter week []) user))))
-;;     (into {} counter)))
+(defn users-to-table [users]
+  (->> users
+       (group-by (comp week-of :registered-at))
+       (map (fn [[week users-in-week]]
+              {:week week
+               :num-signups (count users-in-week)
+               :cast-frequencies (->> users-in-week
+                                      (map classify-casts)
+                                      frequencies)}))
+       (sort-by :week)
+       reverse
+       (map (fn [row] (assoc row :week (week-to-string (:week row)))))))
 
-;; (defn get-weekly-casts-for-all-weeks [casts-by-fid registrations-map]
-;;   (reduce (fn [result week-key]
-;;             (let [user-batch (get registrations-map week-key)
-;;                   weekly-casts-for-week (map #(get-first-week-casts casts-by-fid %) user-batch)]
-;;               (assoc result week-key (apply concat weekly-casts-for-week))))
-;;           {}
-;;           (keys registrations-map)))
-
-;; (def registrations-map (make-registrations-map users start-timestamp))
-;; (def weekly-casts-map (get-weekly-casts-for-all-weeks casts-by-fid registrations-map))
-;; (first weekly-casts-map)
-
-;; (w/append-data "data/first-week-cast-frequency.edn" weekly-casts-map)
-;; (defn get-user [username] (first (filter #(= (:users/username %) username) users)))
-;; (get-first-week-casts casts-by-fid (get-user "abc"))
+(def frequency-matrix (users-to-table processed-users))
+(spit "data/frequency-matrix.edn" (pr-str frequency-matrix))
