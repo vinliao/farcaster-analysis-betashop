@@ -97,13 +97,15 @@
        reverse
        (map (fn [row] (assoc row :week (week-to-string (:week row)))))))
 
-(def frequency-matrix (users-to-table processed-users))
+;; (def frequency-matrix (users-to-table processed-users))
+(def frequency-matrix (u/read-edn "data/frequency-matrix.edn"))
 
 (defn format-frequency-matrix-row [data]
   [(or (:week data) "")
    (or (:num-signups data) 0)
    (or (get (:cast-frequencies data) :cast-0) 0)
    (or (get (:cast-frequencies data) :cast-1) 0)
+   (or (get (:cast-frequencies data) :cast-2+) 0)
    (or (get (:cast-frequencies data) :cast-10+) 0)
    (or (get (:cast-frequencies data) :cast-25+) 0)
    (or (get (:cast-frequencies data) :cast-50+) 0)
@@ -114,6 +116,6 @@
 
 (defn make-frequency-matrix-csv [data file]
   (with-open [writer (io/writer file)]
-    (csv/write-csv writer (cons ["Signup Week" "Number Signups" "Casted 0 Times" "=1x" ">10x" ">25x" ">50x" ">100x"] (format-frequency-matrix-csv data)))))
+    (csv/write-csv writer (cons ["Signup Week" "Number Signups" "Casted 0 Times" "=1x" ">2x" ">10x" ">25x" ">50x" ">100x"] (format-frequency-matrix-csv data)))))
 
 (make-frequency-matrix-csv frequency-matrix "data/frequency-matrix.csv")
