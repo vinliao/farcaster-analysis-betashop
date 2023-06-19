@@ -135,7 +135,7 @@
 (first (filter #(= (:week %) 40) activity-by-registration-week))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; make data user-friendly
+;; save to csv
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defn stringify-map-week [week-data]
@@ -166,27 +166,15 @@
 
 (def final-map (map stringify-map-week (fill-missing-cast-frequencies activity-by-registration-week cast-frequency-keys)))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; save csv
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn flatten-map [m prefix]
+  (reduce-kv
+   (fn [acc k v]
+     (if (map? v)
+       (merge acc (flatten-map v (str prefix k "-")))
+       (assoc acc (str prefix k) v)))
+   {} m))
 
-;; (defn flatten-map [m headers-to-keys]
-;;   (into {} (for [[header key] headers-to-keys] [header (get m key 0)])))
+(defn flatten-data [data]
+  (map #(flatten-map % "") data))
 
-;; (defn format-data [data headers-to-keys]
-;;   (for [entry data]
-;;     (let [week (get entry :week)
-;;           num-signups (get entry :num-signups)
-;;           frequencies (get entry :cast-frequencies)
-;;           formatted-week (clojure.string/replace week " " "-")]
-;;       (merge {:week formatted-week
-;;               :num-signups num-signups}
-;;              (flatten-map frequencies headers-to-keys)))))
-
-;; (defn write-activity-csv [data filename]
-;;   (let [headers (vals csv-headers-map)
-;;         formatted-data (format-data data csv-headers-map)]
-;;     (with-open [writer (io/writer filename)]
-;;       (csv/write-csv writer (cons headers (map vals formatted-data))))))
-
-;; (write-activity-csv final-map "user-activity.csv")
+;; (u/write-csv (flatten-data final-map) "data/final.csv")
