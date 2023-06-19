@@ -2,6 +2,9 @@
   (:gen-class)
   (:require [clj-time.core :as t]
             [clj-time.format :as f]
+            [clojure.data.csv :as csv]
+            [clojure.java.io :as io]
+            [clojure.string :as s]
             [utils :as u]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -131,11 +134,59 @@
 (filter #(>= (:total-cast-count %) 50) users-batch)
 (first (filter #(= (:week %) 40) activity-by-registration-week))
 
-;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; save csv
-;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; make data user-friendly
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defn stringify-map-week [week-data]
   (assoc week-data :week (week-to-string (:week week-data))))
 
-(def final-map (map stringify-map-week activity-by-registration-week))
+(def csv-headers-map {:week "Signup Week"
+                      :num-signups "Number Signups"
+                      :cast-0 "Casted 0 Times"
+                      :cast-1+ ">1x"
+                      :cast-2+ ">2x"
+                      :cast-5+ ">5x"
+                      :cast-10+ ">10x"
+                      :cast-25+ ">25x"
+                      :cast-lwa-25+ "Casted 25+ and Casted Last Week"
+                      :cast-50+ ">50x"
+                      :cast-lwa-50+ "Casted 50+ and Casted Last Week"
+                      :cast-100+ ">100x"
+                      :cast-lwa-100+ "Casted 100+ and Casted Last Week"})
+
+(def cast-frequency-keys (keys (dissoc csv-headers-map :week :num-signups)))
+
+;; emtpy header defaults to 0
+(defn fill-missing-keys [m keys]
+  (into m (for [key keys] (when-not (contains? m key) [key 0]))))
+
+(defn fill-missing-cast-frequencies [data keys]
+  (map (fn [m] (update m :cast-frequencies fill-missing-keys keys)) data))
+
+(def final-map (map stringify-map-week (fill-missing-cast-frequencies activity-by-registration-week cast-frequency-keys)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; save csv
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; (defn flatten-map [m headers-to-keys]
+;;   (into {} (for [[header key] headers-to-keys] [header (get m key 0)])))
+
+;; (defn format-data [data headers-to-keys]
+;;   (for [entry data]
+;;     (let [week (get entry :week)
+;;           num-signups (get entry :num-signups)
+;;           frequencies (get entry :cast-frequencies)
+;;           formatted-week (clojure.string/replace week " " "-")]
+;;       (merge {:week formatted-week
+;;               :num-signups num-signups}
+;;              (flatten-map frequencies headers-to-keys)))))
+
+;; (defn write-activity-csv [data filename]
+;;   (let [headers (vals csv-headers-map)
+;;         formatted-data (format-data data csv-headers-map)]
+;;     (with-open [writer (io/writer filename)]
+;;       (csv/write-csv writer (cons headers (map vals formatted-data))))))
+
+;; (write-activity-csv final-map "user-activity.csv")

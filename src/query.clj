@@ -8,8 +8,7 @@
 (def table-infos {:users {:name "users"
                           :primary-key "fid"}
                   :casts {:name "casts"
-                          :primary-key
-                          "hash"}})
+                          :primary-key "hash"}})
 
 (defn make-base-query [table-info]
   {:select [:*]
