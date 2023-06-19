@@ -2,9 +2,6 @@
   (:gen-class)
   (:require [clj-time.core :as t]
             [clj-time.format :as f]
-            [clojure.data.csv :as csv]
-            [clojure.java.io :as io]
-            [clojure.string :as s]
             [utils :as u]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
