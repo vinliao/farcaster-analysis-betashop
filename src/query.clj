@@ -5,9 +5,7 @@
             [next.jdbc :as jdbc]
             [utils :as u]))
 
-(def table-infos {:locations {:name "locations"
-                              :primary-key "id"}
-                  :users {:name "users"
+(def table-infos {:users {:name "users"
                           :primary-key "fid"}
                   :casts {:name "casts"
                           :primary-key
@@ -28,7 +26,9 @@
        (h/limit 10000)
        (sql/format))))
 
-(defn fetch [query]
+(defn fetch
+  "fetch data from warpy db"
+  [query]
   (let [db (read-string (slurp "env.edn"))
         ds (jdbc/get-datasource db)]
     (jdbc/with-transaction [conn ds]
