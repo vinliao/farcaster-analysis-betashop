@@ -19,5 +19,6 @@ pom.xml.asc
 words.txt
 env.edn
 *.log
-/data
+/data/*
+!/data/final.csv
 casts.bak.edn
