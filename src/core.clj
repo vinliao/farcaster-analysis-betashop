@@ -1,6 +1,7 @@
 (ns core
   (:gen-class)
   (:require [clj-time.core :as t]
+
             [clj-time.format :as f]
             [clojure.data.csv :as csv]
             [clojure.java.io :as io]
@@ -26,15 +27,8 @@
                         u/get-timestamp-joda))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; first week cast count, casted last week, register timestamp
+;; frequency matrix
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn get-first-week-casts [user]
-  (let [casts-by-user (get casts-by-fid (:users/fid user))
-        one-week-later (t/plus (u/get-timestamp-joda user) (t/weeks 1))]
-    (filter (fn [cast]
-              (and (t/after? (u/get-timestamp-joda cast) (u/get-timestamp-joda user))
-                   (t/before? (u/get-timestamp-joda cast) one-week-later)))
-            casts-by-user)))
 
 (defn user-cast-last-week? [user end-timestamp]
   (let [casts-by-user (get casts-by-fid (:users/fid user))
@@ -45,20 +39,15 @@
            casts-by-user)
      false)))
 
-(defn get-user-cast-data [users end-timestamp]
+(defn get-user-all-casts-data [users]
   (map (fn [user]
          {:fid (:users/fid user)
           :username (:users/username user)
           :registered-at (u/get-timestamp-joda user)
-          :first-week-cast-count (count (get-first-week-casts user))
+          :total-cast-count (count (casts-by-fid (:users/fid user)))
           :casted-last-week? (user-cast-last-week? user end-timestamp)})
        users))
 
-(def processed-users (get-user-cast-data users end-timestamp))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; frequency matrix
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn week-of [timestamp]
   (let [timestamp-joda (u/get-timestamp-joda timestamp)]
     (if (.isEqual start-timestamp timestamp-joda)
@@ -74,15 +63,16 @@
     (f/unparse (f/formatter "MMMM d, yyyy") date-after-n-weeks)))
 
 (defn classify-casts [user]
-  (let [count (:first-week-cast-count user)]
-    (cond
-      (zero? count) :cast-0
-      (= 1 count) :cast-1
-      (>= count 100) :cast-100+
-      (>= count 50) :cast-50+
-      (>= count 25) :cast-25+
-      (>= count 10) :cast-10+
-      (>= count 2) :cast-2+)))
+  (let [count (:total-cast-count user)]
+    (cond-> []
+      (>= count 1) (conj :cast-1+)
+      (>= count 2) (conj :cast-2+)
+      (>= count 5) (conj :cast-5+)
+      (>= count 10) (conj :cast-10+)
+      (>= count 25) (conj :cast-25+)
+      (>= count 50) (conj :cast-50+)
+      (>= count 100) (conj :cast-100+)
+      (zero? count) (conj :cast-0))))
 
 (defn users-to-table [users]
   (->> users
@@ -91,31 +81,89 @@
               {:week week
                :num-signups (count users-in-week)
                :cast-frequencies (->> users-in-week
-                                      (map classify-casts)
+                                      (mapcat classify-casts)
                                       frequencies)}))
        (sort-by :week)
        reverse
        (map (fn [row] (assoc row :week (week-to-string (:week row)))))))
 
-;; (def frequency-matrix (users-to-table processed-users))
-(def frequency-matrix (u/read-edn "data/frequency-matrix.edn"))
+(def user-all-casts-data (get-user-all-casts-data users))
+(def frequency-matrix (users-to-table user-all-casts-data))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; casted a lot and still casted last week?
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn filter-count-and-cast-last-week [users cast-count key]
+  (->> users
+       (filter #(and (>= (:total-cast-count %) cast-count)
+                     (:casted-last-week? %)))
+       (group-by #(week-of (:registered-at %)))
+       (map (fn [[week users-in-week]]
+              {(week-to-string week) {key (count users-in-week)}}))))
+
+(def count-and-last-week-map
+  (reduce (fn [accum new-data]
+            (merge-with merge accum new-data))
+          (concat (filter-count-and-cast-last-week user-all-casts-data 25 :users-casted-25+-and-casted-last-week)
+                  (filter-count-and-cast-last-week user-all-casts-data 50 :users-casted-50+-and-casted-last-week)
+                  (filter-count-and-cast-last-week user-all-casts-data 100 :users-casted-100+-and-casted-last-week))))
+
+(defn format-row [[week data]]
+  [week
+   (or (:users-casted-25+-and-casted-last-week data) 0)
+   (or (:users-casted-50+-and-casted-last-week data) 0)
+   (or (:users-casted-100+-and-casted-last-week data) 0)])
+
+(defn format-rows [data]
+  (map format-row data))
+
+(defn make-thing [data file]
+  (with-open [writer (io/writer file)]
+    (csv/write-csv writer (cons ["Signup Week" ">25x and casted last week" ">50x and casted last week" ">100x and casted last week"] (format-rows data)))))
+
+(defn merge-data [frequency-matrix merged-data]
+  (map (fn [week-data]
+         (let [week (get week-data :week)]
+           (if-let [add-data (get merged-data week)]
+             (update week-data :cast-frequencies merge add-data)
+             week-data)))
+       frequency-matrix))
+
+(def merged-data (merge-data frequency-matrix count-and-last-week-map))
 
 (defn format-frequency-matrix-row [data]
   [(or (:week data) "")
    (or (:num-signups data) 0)
    (or (get (:cast-frequencies data) :cast-0) 0)
-   (or (get (:cast-frequencies data) :cast-1) 0)
+   (or (get (:cast-frequencies data) :cast-1+) 0)
    (or (get (:cast-frequencies data) :cast-2+) 0)
+   (or (get (:cast-frequencies data) :cast-5+) 0)
    (or (get (:cast-frequencies data) :cast-10+) 0)
    (or (get (:cast-frequencies data) :cast-25+) 0)
+   (or (get (:cast-frequencies data) :users-casted-25+-and-casted-last-week) 0)
    (or (get (:cast-frequencies data) :cast-50+) 0)
-   (or (get (:cast-frequencies data) :cast-100+) 0)])
+   (or (get (:cast-frequencies data) :users-casted-50+-and-casted-last-week) 0)
+   (or (get (:cast-frequencies data) :cast-100+) 0)
+   (or (get (:cast-frequencies data) :users-casted-100+-and-casted-last-week) 0)])
 
 (defn format-frequency-matrix-csv [data]
   (map format-frequency-matrix-row data))
 
 (defn make-frequency-matrix-csv [data file]
   (with-open [writer (io/writer file)]
-    (csv/write-csv writer (cons ["Signup Week" "Number Signups" "Casted 0 Times" "=1x" ">2x" ">10x" ">25x" ">50x" ">100x"] (format-frequency-matrix-csv data)))))
+    (csv/write-csv writer (cons ["Signup Week"
+                                 "Number Signups"
+                                 "Casted 0 Times"
+                                 ">1x"
+                                 ">2x"
+                                 ">5x"
+                                 ">10x"
+                                 ">25x"
+                                 "Casted 25+ and Last Week"
+                                 ">50x"
+                                 "Casted 50+ and Last Week"
+                                 ">100x"
+                                 "Casted 100+ and Last Week"]
+                                (format-frequency-matrix-csv data)))))
 
-(make-frequency-matrix-csv frequency-matrix "data/frequency-matrix.csv")
+(make-frequency-matrix-csv merged-data "data/frequency-matrix-2.csv")

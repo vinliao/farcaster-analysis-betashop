@@ -20,7 +20,7 @@
 (defmethod get-timestamp-joda :default [data] data)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; timestamp utils
+;; csv utils
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn write-csv [data filename]
   (let [header (map name (keys (first data)))]
