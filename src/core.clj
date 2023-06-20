@@ -89,8 +89,8 @@
           :registered-at (u/get-timestamp-joda user)
           :registered-at-week (week-of user)
           :total-cast-count (count (casts-by-fid (:users/fid user)))
-          :casted-last-week? (user-cast-last-week? user end-timestamp)
-          :casted-three-months? (user-cast-three-months? user end-timestamp)})
+          ;; :casted-three-months? (user-cast-three-months? user end-timestamp)
+          :casted-last-week? (user-cast-last-week? user end-timestamp)})
        users))
 
 (defn group-activity-by-registration-week [users]
@@ -140,15 +140,15 @@
 (def users-batch (get-users-of-week users-activity 55))
 (first (filter #(= (:week %) 40) activity-by-registration-week))
 
-(defn ex-active-users [users-activity]
-  (->> users-activity
-       (filter (fn [user]
-                 (and (>= (:total-cast-count user) 50)
-                      (not (:casted-three-months? user)))))
-       (sort-by :total-cast-count >)))
+;; (defn ex-active-users [users-activity]
+;;   (->> users-activity
+;;        (filter (fn [user]
+;;                  (and (>= (:total-cast-count user) 50)
+;;                       (not (:casted-three-months? user)))))
+;;        (sort-by :total-cast-count >)))
 
-(count (ex-active-users users-activity))
-(take 3 (ex-active-users users-activity))
+;; (count (ex-active-users users-activity))
+;; (take 3 (ex-active-users users-activity))
 ;; (u/write-csv (ex-active-users users-activity) "ex-active-users.csv")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

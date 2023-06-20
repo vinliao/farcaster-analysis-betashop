@@ -58,4 +58,4 @@
      (when (seq data)
        (fetch-and-save table-info (pk-keyword (last data)))))))
 
-;; (fetch-and-save (table-infos :users))
+;; (fetch-and-save (:casts table-infos))

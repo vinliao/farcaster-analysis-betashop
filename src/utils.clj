@@ -35,11 +35,11 @@
 
 (defn read-edn [filename]
   (if (.exists (io/file filename))
-    (let [file-content (slurp (io/file filename))]
+    (let [file-content (str "(" (slurp (io/file filename)) ")")]
       (if (empty? file-content) [] (edn/read-string file-content)))
     []))
 
 (defn write-edn [filename data]
-  (let [existing-data (read-edn filename)
-        merged-data (concat existing-data data)]
-    (spit filename (prn-str merged-data))))
+  (if (sequential? data)
+    (spit filename (apply str (map prn-str data)) :append true)
+    (spit filename (prn-str data) :append true)))
