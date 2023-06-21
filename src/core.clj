@@ -2,6 +2,8 @@
   (:gen-class)
   (:require [clj-time.core :as t]
             [clj-time.format :as f]
+            [clojure.data.csv :as csv]
+            [clojure.java.io :as io]
             [utils :as u]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -158,40 +160,33 @@
 (defn stringify-map-week [week-data]
   (assoc week-data :week (week-to-string (:week week-data))))
 
-(def csv-headers-map {:week "Signup Week"
-                      :num-signups "Number Signups"
-                      :cast-0 "Casted 0 Times"
-                      :cast-1+ ">1x"
-                      :cast-2+ ">2x"
-                      :cast-5+ ">5x"
-                      :cast-10+ ">10x"
-                      :cast-25+ ">25x"
-                      :cast-lwa-25+ "Casted 25+ and Casted Last Week"
-                      :cast-50+ ">50x"
-                      :cast-lwa-50+ "Casted 50+ and Casted Last Week"
-                      :cast-100+ ">100x"
-                      :cast-lwa-100+ "Casted 100+ and Casted Last Week"})
-
-(def cast-frequency-keys (keys (dissoc csv-headers-map :week :num-signups)))
+(def csv-headers '(:week :num-signups :cast-0 :cast-1+ :cast-2+ :cast-5+
+                         :cast-10+ :cast-25+ :cast-lwa-25+ :cast-50+
+                         :cast-lwa-50+ :cast-100+ :cast-lwa-100+))
+(def cast-frequency-keys (filter #(not (#{:week :num-signups} %)) csv-headers))
 
 ;; emtpy header defaults to 0
 (defn fill-missing-keys [m keys]
-  (into m (for [key keys] (when-not (contains? m key) [key 0]))))
+  (reduce (fn [m k] (if (contains? m k) m (assoc m k 0))) m keys))
 
-(defn fill-missing-cast-frequencies [data keys]
-  (map (fn [m] (update m :cast-frequencies fill-missing-keys keys)) data))
+(defn fill-missing-cast-frequencies [data]
+  (map (fn [m] (update m :cast-frequencies fill-missing-keys cast-frequency-keys)) data))
 
-(def final-map (map stringify-map-week (fill-missing-cast-frequencies activity-by-registration-week cast-frequency-keys)))
+(defn flatten-cast-frequencies [m]
+  (let [{:keys [week num-signups cast-frequencies]} m]
+    (merge {:week week,
+            :num-signups num-signups} cast-frequencies)))
 
-(defn flatten-map [m prefix]
-  (reduce-kv
-   (fn [acc k v]
-     (if (map? v)
-       (merge acc (flatten-map v (str prefix k "-")))
-       (assoc acc (str prefix k) v)))
-   {} m))
+(defn write-ordered-csv
+  [filename header data]
+  (let [ordered-data (map (fn [row] (map row header)) data)
+        string-header (map name header)]
+    (with-open [writer (io/writer filename)]
+      (csv/write-csv writer (cons string-header ordered-data)))))
 
-(defn flatten-data [data]
-  (map #(flatten-map % "") data))
+(def final-map (->> activity-by-registration-week
+                    (fill-missing-cast-frequencies)
+                    (map flatten-cast-frequencies)
+                    (map stringify-map-week)))
 
-;; (u/write-csv (flatten-data final-map) "data/final.csv")
+(write-ordered-csv "data/final.csv" csv-headers final-map)
